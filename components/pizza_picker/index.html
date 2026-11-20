@@ -8,10 +8,13 @@
       html, body { margin: 0; padding: 0; background: transparent; }
       body { display: flex; justify-content: center; align-items: center; min-height: 330px; }
       svg { width: min(320px, 100%); height: auto; overflow: visible; touch-action: manipulation; }
-      .slice { cursor: pointer; stroke: #fff8df; stroke-width: 4; transition: fill .12s ease, filter .12s ease; }
-      .slice:hover:not(.disabled) { filter: brightness(1.06); }
+      .slice { cursor: pointer; stroke: #fff8df; stroke-width: 4; transition: fill .15s ease, filter .15s ease; }
+      .slice:hover:not(.disabled) { filter: brightness(1.1) drop-shadow(0 2px 2px #a45424); }
       .slice:focus { outline: none; filter: drop-shadow(0 0 4px #a84c20); }
       .slice.disabled { cursor: default; }
+      .slice.pop { transform-box: fill-box; transform-origin: center; animation: slice-pop .32s ease-out; }
+      @keyframes slice-pop { 0% { transform: scale(.88); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
+      .topping { pointer-events: none; }
     </style>
   </head>
   <body>
@@ -20,6 +23,7 @@
       const svg = document.getElementById("pizza");
       const svgNS = "http://www.w3.org/2000/svg";
       let renderArgs = {};
+      let lastCelebration = 0;
 
       function point(angle, radius) {
         const radians = (angle * Math.PI) / 180;
@@ -61,8 +65,9 @@
           const end = -90 + (360 * (index + 1)) / denominator;
           const slice = document.createElementNS(svgNS, "path");
           slice.setAttribute("d", makeSlicePath(start, end, 136));
-          slice.setAttribute("fill", selected.has(index) ? "#ef853b" : "#ffd66b");
-          slice.setAttribute("class", disabled ? "slice disabled" : "slice");
+          slice.setAttribute("fill", selected.has(index) ? "#ed6845" : "#ffd66b");
+          const justSelected = Number(args.popped) === index;
+          slice.setAttribute("class", `${disabled ? "slice disabled" : "slice"}${justSelected ? " pop" : ""}`);
           slice.setAttribute("role", "button");
           slice.setAttribute("tabindex", disabled ? "-1" : "0");
           slice.setAttribute("aria-label", `${index + 1}번 조각${selected.has(index) ? " 선택됨" : ""}`);
@@ -74,7 +79,9 @@
             const next = new Set((renderArgs.selected || []).map(Number));
             if (next.has(index)) next.delete(index);
             else next.add(index);
-            sendSelection([...next].sort((a, b) => a - b));
+            const selection = [...next].sort((a, b) => a - b);
+            draw({ ...renderArgs, selected: selection, popped: next.has(index) ? index : -1 });
+            sendSelection(selection);
           };
           slice.addEventListener("click", toggle);
           slice.addEventListener("keydown", event => {
@@ -84,6 +91,18 @@
             }
           });
           svg.appendChild(slice);
+
+          if (selected.has(index)) {
+            const [x, y] = point((start + end) / 2, 78);
+            const topping = document.createElementNS(svgNS, "text");
+            topping.setAttribute("x", String(x));
+            topping.setAttribute("y", String(y + 7));
+            topping.setAttribute("text-anchor", "middle");
+            topping.setAttribute("font-size", denominator > 6 ? "18" : "22");
+            topping.setAttribute("class", "topping");
+            topping.textContent = "✨";
+            svg.appendChild(topping);
+          }
         }
 
         const label = document.createElementNS(svgNS, "text");
@@ -93,8 +112,22 @@
         label.setAttribute("font-size", "14");
         label.setAttribute("font-family", "sans-serif");
         label.setAttribute("fill", "#694322");
-        label.textContent = disabled ? `${denominator}조각 피자` : "조각을 눌러 골라요";
+        label.textContent = disabled ? `${denominator}조각 피자` : `${selected.size}조각 선택 · 눌러서 바꿔요`;
         svg.appendChild(label);
+
+        if (Number(args.celebration) > lastCelebration) {
+          lastCelebration = Number(args.celebration);
+          const cheer = document.createElementNS(svgNS, "text");
+          cheer.setAttribute("x", "160");
+          cheer.setAttribute("y", "35");
+          cheer.setAttribute("text-anchor", "middle");
+          cheer.setAttribute("font-size", "22");
+          cheer.setAttribute("font-weight", "bold");
+          cheer.setAttribute("fill", "#d94e30");
+          cheer.textContent = "주문 성공! 🎉";
+          cheer.style.animation = "slice-pop .4s ease-out";
+          svg.appendChild(cheer);
+        }
       }
 
       window.addEventListener("message", event => {
