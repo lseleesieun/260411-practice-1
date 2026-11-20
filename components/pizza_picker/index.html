@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: transparent; }
+      body { display: flex; justify-content: center; align-items: center; min-height: 330px; }
+      svg { width: min(320px, 100%); height: auto; overflow: visible; touch-action: manipulation; }
+      .slice { cursor: pointer; stroke: #fff8df; stroke-width: 4; transition: fill .12s ease, filter .12s ease; }
+      .slice:hover:not(.disabled) { filter: brightness(1.06); }
+      .slice:focus { outline: none; filter: drop-shadow(0 0 4px #a84c20); }
+      .slice.disabled { cursor: default; }
+    </style>
+  </head>
+  <body>
+    <svg id="pizza" viewBox="0 0 320 320" role="group" aria-label="조각을 눌러 선택하는 피자"></svg>
+    <script>
+      const svg = document.getElementById("pizza");
+      const svgNS = "http://www.w3.org/2000/svg";
+      let renderArgs = {};
+
+      function point(angle, radius) {
+        const radians = (angle * Math.PI) / 180;
+        return [160 + Math.cos(radians) * radius, 160 + Math.sin(radians) * radius];
+      }
+
+      function makeSlicePath(start, end, radius) {
+        const first = point(start, radius);
+        const last = point(end, radius);
+        const largeArc = end - start > 180 ? 1 : 0;
+        return `M 160 160 L ${first[0]} ${first[1]} A ${radius} ${radius} 0 ${largeArc} 1 ${last[0]} ${last[1]} Z`;
+      }
+
+      function sendSelection(selection) {
+        window.parent.postMessage({
+          isStreamlitMessage: true,
+          type: "streamlit:setComponentValue",
+          value: selection,
+          dataType: "json"
+        }, "*");
+      }
+
+      function draw(args) {
+        renderArgs = args;
+        const denominator = Math.max(2, Math.min(8, Number(args.denominator) || 4));
+        const disabled = Boolean(args.disabled);
+        const selected = new Set((args.selected || []).map(Number));
+        svg.replaceChildren();
+
+        const crust = document.createElementNS(svgNS, "circle");
+        crust.setAttribute("cx", "160");
+        crust.setAttribute("cy", "160");
+        crust.setAttribute("r", "145");
+        crust.setAttribute("fill", "#d98136");
+        svg.appendChild(crust);
+
+        for (let index = 0; index < denominator; index += 1) {
+          const start = -90 + (360 * index) / denominator;
+          const end = -90 + (360 * (index + 1)) / denominator;
+          const slice = document.createElementNS(svgNS, "path");
+          slice.setAttribute("d", makeSlicePath(start, end, 136));
+          slice.setAttribute("fill", selected.has(index) ? "#ef853b" : "#ffd66b");
+          slice.setAttribute("class", disabled ? "slice disabled" : "slice");
+          slice.setAttribute("role", "button");
+          slice.setAttribute("tabindex", disabled ? "-1" : "0");
+          slice.setAttribute("aria-label", `${index + 1}번 조각${selected.has(index) ? " 선택됨" : ""}`);
+          slice.setAttribute("aria-pressed", selected.has(index) ? "true" : "false");
+          if (disabled) slice.setAttribute("aria-disabled", "true");
+
+          const toggle = () => {
+            if (disabled) return;
+            const next = new Set((renderArgs.selected || []).map(Number));
+            if (next.has(index)) next.delete(index);
+            else next.add(index);
+            sendSelection([...next].sort((a, b) => a - b));
+          };
+          slice.addEventListener("click", toggle);
+          slice.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggle();
+            }
+          });
+          svg.appendChild(slice);
+        }
+
+        const label = document.createElementNS(svgNS, "text");
+        label.setAttribute("x", "160");
+        label.setAttribute("y", "306");
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("font-size", "14");
+        label.setAttribute("font-family", "sans-serif");
+        label.setAttribute("fill", "#694322");
+        label.textContent = disabled ? `${denominator}조각 피자` : "조각을 눌러 골라요";
+        svg.appendChild(label);
+      }
+
+      window.addEventListener("message", event => {
+        if (event.data && event.data.type === "streamlit:render") {
+          draw(event.data.args || {});
+        }
+      });
+
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:componentReady",
+        apiVersion: 1
+      }, "*");
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height: 330
+      }, "*");
+    </script>
+  </body>
+</html>
